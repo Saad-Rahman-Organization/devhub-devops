@@ -3,11 +3,12 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "ng serve",
-    "build": "ng build",
+    "start": "npm init && npm install -g npm@9.5.1 && npm install -g node@18.14.2 && npm install -g @angular/cli && npm install -g @angular-devkit/build-angular:dev-server && ng serve --host 0.0.0.0 --disable-host-check",
+    "build": "ng build && npm install ng",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "server": "ts-node -P ./server.tsconfig.json ./server.ts"
+    "server": "ts-node -P ./server.tsconfig.json ./server.ts",
+    "build:ssr": "ng build --prod vitorspace && ng run vitorspace:server:production"
   },
   "private": true,
   "dependencies": {
