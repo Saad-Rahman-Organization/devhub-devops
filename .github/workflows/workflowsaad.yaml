@@ -1,0 +1,204 @@
+name: Workflow Saad
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "main" branch
+  push:
+    branches: ["saad"]
+  pull_request:
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+env:
+  GH_TOKEN: ${{ github.token }}
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+  OPENSHIFT_SERVER: https://api.rm2.thpm.p1.openshiftapps.com:6443
+  OPENSHIFT_TOKEN: sha256~JY3wwW3E994Z_kwwfuEZI8rxUB2IxTOp9Y9CvBqELtc
+  # 🖊️ EDIT to set the kube context's namespace after login. Leave blank to use your user's default namespace.
+  OPENSHIFT_NAMESPACE: ""
+
+  # 🖊️ EDIT to set a name for your OpenShift app, or a default one will be generated below.
+  APP_NAME: ""
+
+  # 🖊️ EDIT with the port your application should be accessible on.
+  # If the container image exposes *exactly one* port, this can be left blank.
+  # Refer to the 'port' input of https://github.com/redhat-actions/oc-new-app
+  APP_PORT: ""
+
+  # 🖊️ EDIT to change the image registry settings.
+  # Registries such as GHCR, Quay.io, and Docker Hub are supported.
+  IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+  IMAGE_REGISTRY_USER: ${{ github.actor }}
+  IMAGE_REGISTRY_PASSWORD: ${{ github.token }}
+
+  # 🖊️ EDIT to specify custom tags for the container image, or default tags will be generated below.
+  IMAGE_TAGS: ""
+  RUN_ID : ${{ github.run_id }}
+  
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 18
+        #Node.js 18 gained LTS in 2022
+        uses: actions/setup-node@v4.0.0
+        with:
+          node-version: 18.x
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
+
+      
+  test:
+     runs-on: ubuntu-latest
+     steps:
+       - name: Checkout repository
+         uses: actions/checkout@master
+       - name: Set up Node.js 18
+         #Node.js 18 gained LTS in 2022
+         uses: actions/setup-node@v4.0.0
+         with:
+           node-version: 18.x
+       - name: Install dependencies
+         run: npm install
+       - name: Run the tests
+         run: npm test -- --coverage
+       - name: CodeCov Reporting
+         uses: codecov/codecov-action@v3
+         with:
+           token: ${{ secrets.CODECOV_TOKEN }} # not required for public repos
+           fail_ci_if_error: true
+           verbose: true
+  build-and-push-image:
+    needs: build
+    runs-on: ubuntu-latest
+    # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+      #
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      # Uses the `docker/login-action` action to log in to the Container registry registry using the account and password that will publish the packages. Once published, the packages are scoped to the account defined here.
+      - name: Log in to the Container registry
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # This step uses [docker/metadata-action](https://github.com/docker/metadata-action#about) to extract tags and labels that will be applied to the specified image. The `id` "meta" allows the output of this step to be referenced in a subsequent step. The `images` value provides the base name for the tags and labels.
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+      # This step uses the `docker/build-push-action` action to build the image, based on your repository's `Dockerfile`. If the build succeeds, it pushes the image to GitHub Packages.
+      # It uses the `context` parameter to define the build's context as the set of files located in the specified path. For more information, see [Usage](https://github.com/docker/build-push-action#usage) in the README of the `docker/build-push-action` repository.
+      # It uses the `tags` and `labels` parameters to tag and label the image with the output from the "meta" step.
+      - name: Build and push Docker image
+        id: push
+        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}-${{ github.run_id }}
+          labels: ${{ steps.meta.outputs.labels }}    
+  openshift-ci-cd:
+    # 🖊️ Uncomment this if you are using CRDA scan step above
+    needs: build-and-push-image
+    name: Build and deploy to OpenShift
+    runs-on: ubuntu-latest
+    environment: production
+
+    outputs:
+      ROUTE: ${{ steps.deploy-and-expose.outputs.route }}
+      SELECTOR: ${{ steps.deploy-and-expose.outputs.selector }}
+
+    
+
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v4
+    - name: Install oc
+      uses: redhat-actions/openshift-tools-installer@v1
+      with:
+         oc: 4
+    - name: Log in to OpenShift
+      uses: redhat-actions/oc-login@v1
+      with:
+        openshift_server_url: ${{ env.OPENSHIFT_SERVER }}
+        openshift_token: ${{ env.OPENSHIFT_TOKEN }}
+        insecure_skip_tls_verify: true
+        namespace: ${{ env.OPENSHIFT_NAMESPACE }}
+    - name: Switch project
+      run: |
+          oc project saadrahmanwarsi-dev
+    - name: Check file
+      run: |
+        oc --help
+    - name: Delete route
+      run: |
+          oc delete route route-applicable-sparrow
+    - name: Delete secret
+      if: always()
+      run: |
+          oc delete secret pharmfinder-ui-secret
+    - name: Delete service
+      if: always()
+      run: |
+          oc delete service pharmfinder-ui-service
+    - name: Delete deployment
+      if: always()
+      run: |
+          oc delete deployment pharmfinder-ui-deployment
+    - name: Sleep 
+      if: always()
+      run: |
+          sleep 40
+    - name: Image pull
+      if: always()
+      run: |
+          oc import-image ghcr.io/dpr-group-inc/pharmfinder-client:saad --token JY3wwW3E994Z_kwwfuEZI8rxUB2IxTOp9Y9CvBqELtc --confirm
+    - name: Apply secret
+      if: always()
+      run: |
+          oc apply -f dpr-secret.yaml
+    - name: Apply service
+      if: always()
+      run: |
+          oc apply -f service.yaml
+    - name: Apply deployment
+      if: always()
+      run: |
+          cat deployment.yaml | sed 's/xxx/${{ env.RUN_ID }}/' > deployment-temp.yaml
+          cat deployment-temp.yaml
+          oc apply -f deployment-temp.yaml
+    - name: Apply route
+      if: always()
+      run: |
+          oc apply -f route.yaml
+    
+       
+
