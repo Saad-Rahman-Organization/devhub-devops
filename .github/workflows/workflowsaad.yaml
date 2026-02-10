@@ -4,7 +4,7 @@ name: Workflow Saad
 on:
   # Triggers the workflow on push or pull request events but only for the "main" branch
   push:
-    branches: ["saad"]
+    branches: ["main"]
   pull_request:
 
   # Allows you to run this workflow manually from the Actions tab
@@ -180,7 +180,7 @@ jobs:
     - name: Image pull
       if: always()
       run: |
-          oc import-image ghcr.io/dpr-group-inc/pharmfinder-client:saad --token JY3wwW3E994Z_kwwfuEZI8rxUB2IxTOp9Y9CvBqELtc --confirm
+          oc import-image ghcr.io/Saad-Rahman-Organization/devhub-devops:saad --token JY3wwW3E994Z_kwwfuEZI8rxUB2IxTOp9Y9CvBqELtc --confirm
     - name: Apply secret
       if: always()
       run: |
