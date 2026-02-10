@@ -1,0 +1,18 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: route-applicable-sparrow
+  namespace: saadrahmanwarsi-dev
+spec:
+  path: /
+  to:
+    name: pharmfinder-ui-service
+    weight: 100
+    kind: Service
+  host: ''
+  tls:
+    insecureEdgeTerminationPolicy: ''
+    termination: edge
+  port:
+    targetPort: 8080
+  alternateBackends: []
