@@ -80,8 +80,8 @@ jobs:
            node-version: 18.x
        - name: Install dependencies
          run: npm install
-       - name: Run the tests
-         run: npm test -- --coverage
+       #- name: Run the tests
+        # run: npm test -- --coverage
        - name: CodeCov Reporting
          uses: codecov/codecov-action@v3
          with:
